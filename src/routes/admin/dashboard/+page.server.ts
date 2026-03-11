@@ -3,7 +3,6 @@ import { db } from '$lib/server/db/index.js';
 import { users, shifts, orders, orderItems, products, areas } from '$lib/server/db/schema.js';
 import { eq, desc, sql, gte, lte, and } from 'drizzle-orm';
 import { fail } from '@sveltejs/kit';
-import { hashPassword } from '$lib/server/auth.js';
 import bcrypt from 'bcryptjs';
 
 export const load: PageServerLoad = async ({ url, locals }) => {
@@ -98,19 +97,17 @@ export const actions: Actions = {
 		if (locals.user?.role !== 'admin') return fail(403, { error: 'No autorizado' });
 		const formData = await request.formData();
 		const username = formData.get('username') as string;
-		const password = formData.get('password') as string;
-		const role = formData.get('role') as 'admin' | 'supervisor' | 'vendedor';
 		const pin = formData.get('pin') as string;
+		const role = formData.get('role') as 'admin' | 'supervisor' | 'vendedor';
 
-		if (!username || !password || !role) {
+		if (!username || !pin || !role) {
 			return fail(400, { error: 'Todos los campos son requeridos' });
 		}
 
-		const passwordHash = await hashPassword(password);
-		const pinHash = pin ? await bcrypt.hash(pin, 10) : null;
+		const pinHash = await bcrypt.hash(pin, 10);
 
 		try {
-			await db.insert(users).values({ username, passwordHash, role, pin: pinHash });
+			await db.insert(users).values({ username, role, pin: pinHash });
 		} catch {
 			return fail(400, { error: 'El usuario ya existe' });
 		}
@@ -135,12 +132,12 @@ export const actions: Actions = {
 		return { success: true };
 	},
 
-	resetPassword: async ({ request, locals }) => {
+	resetPin: async ({ request, locals }) => {
 		if (locals.user?.role !== 'admin') return fail(403, { error: 'No autorizado' });
 		const formData = await request.formData();
 		const id = parseInt(formData.get('id') as string);
-		const passwordHash = await hashPassword('1234');
-		await db.update(users).set({ passwordHash }).where(eq(users.id, id));
+		const pinHash = await bcrypt.hash('0000', 10);
+		await db.update(users).set({ pin: pinHash }).where(eq(users.id, id));
 		return { resetSuccess: true };
 	},
 

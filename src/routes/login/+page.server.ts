@@ -2,17 +2,18 @@ import { fail, redirect } from '@sveltejs/kit';
 import type { Actions } from './$types.js';
 import { db } from '$lib/server/db/index.js';
 import { users } from '$lib/server/db/schema.js';
-import { createToken, verifyPassword } from '$lib/server/auth.js';
+import { createToken } from '$lib/server/auth.js';
 import { eq } from 'drizzle-orm';
+import bcrypt from 'bcryptjs';
 
 export const actions: Actions = {
 	default: async ({ request, cookies, url }) => {
 		const formData = await request.formData();
 		const username = formData.get('username') as string;
-		const password = formData.get('password') as string;
+		const pin = formData.get('pin') as string;
 
-		if (!username || !password) {
-			return fail(400, { error: 'Usuario y contraseña son requeridos' });
+		if (!username || !pin) {
+			return fail(400, { error: 'Usuario y PIN son requeridos' });
 		}
 
 		const [user] = await db.select().from(users).where(eq(users.username, username)).limit(1);
@@ -21,7 +22,7 @@ export const actions: Actions = {
 			return fail(401, { error: 'Credenciales incorrectas' });
 		}
 
-		const valid = await verifyPassword(password, user.passwordHash);
+		const valid = await bcrypt.compare(pin, user.pin);
 		if (!valid) {
 			return fail(401, { error: 'Credenciales incorrectas' });
 		}

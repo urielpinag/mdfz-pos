@@ -11,19 +11,17 @@ const db = drizzle(client);
 async function seed() {
 	console.log('Seeding database...');
 
-	const passwordHash = await bcrypt.hash('1234', 10);
 	const pinHash = await bcrypt.hash('0000', 10);
 
 	// Create admin user
 	await db.insert(users).values({
 		username: 'admin',
-		passwordHash,
 		role: 'admin',
 		pin: pinHash
 	}).onConflictDoNothing();
 
 	console.log('Seed completed!');
-	console.log('Usuario admin creado: admin/1234 (PIN: 0000)');
+	console.log('Usuario admin creado: admin / PIN: 0000');
 	await client.end();
 }
 

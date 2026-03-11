@@ -30,11 +30,11 @@
 			</div>
 
 			<div class="mb-6">
-				<label for="password" class="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
+				<label for="pin" class="block text-sm font-medium text-gray-700 mb-1">PIN</label>
 				<input
 					type="password"
-					id="password"
-					name="password"
+					id="pin"
+					name="pin"
 					required
 					inputmode="numeric"
 					maxlength="4"

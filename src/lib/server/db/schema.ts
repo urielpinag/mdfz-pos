@@ -6,9 +6,8 @@ export const metodoPagoEnum = pgEnum('metodo_pago', ['efectivo', 'tarjeta', 'tra
 export const users = pgTable('users', {
 	id: serial('id').primaryKey(),
 	username: varchar('username', { length: 50 }).notNull().unique(),
-	passwordHash: varchar('password_hash', { length: 255 }).notNull(),
 	role: roleEnum('role').notNull().default('vendedor'),
-	pin: varchar('pin', { length: 255 }),
+	pin: varchar('pin', { length: 255 }).notNull(),
 	createdAt: timestamp('created_at').defaultNow().notNull()
 });
 

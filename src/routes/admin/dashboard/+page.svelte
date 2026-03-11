@@ -97,7 +97,7 @@
 		<div class="bg-green-100 text-green-700 px-4 py-2 rounded mb-4 text-sm">Operación exitosa</div>
 	{/if}
 	{#if form?.resetSuccess}
-		<div class="bg-yellow-100 text-yellow-700 px-4 py-2 rounded mb-4 text-sm">Contraseña reseteada a 1234</div>
+		<div class="bg-yellow-100 text-yellow-700 px-4 py-2 rounded mb-4 text-sm">PIN reseteado a 0000</div>
 	{/if}
 
 	<!-- ==================== USUARIOS ==================== -->
@@ -119,12 +119,8 @@
 						<input type="text" name="username" id="new-username" required class="w-full px-3 py-2 border rounded-md text-sm" />
 					</div>
 					<div class="w-32">
-						<label for="new-password" class="block text-xs text-gray-500 mb-1">Contraseña</label>
-						<input type="text" name="password" id="new-password" maxlength="4" required class="w-full px-3 py-2 border rounded-md text-sm" />
-					</div>
-					<div class="w-32">
 						<label for="new-pin" class="block text-xs text-gray-500 mb-1">PIN (4 dígitos)</label>
-						<input type="text" name="pin" id="new-pin" maxlength="4" class="w-full px-3 py-2 border rounded-md text-sm" />
+						<input type="text" name="pin" id="new-pin" maxlength="4" required inputmode="numeric" class="w-full px-3 py-2 border rounded-md text-sm" />
 					</div>
 					<div class="w-36">
 						<label for="new-role" class="block text-xs text-gray-500 mb-1">Rol</label>
@@ -189,9 +185,9 @@
 								{#if isAdmin}
 									<td class="px-4 py-3 text-right">
 										<button onclick={() => editingUserId = user.id} class="text-blue-600 hover:text-blue-800 text-sm mr-2">Editar</button>
-										<form method="POST" action="?/resetPassword" use:enhance class="inline">
+										<form method="POST" action="?/resetPin" use:enhance class="inline">
 											<input type="hidden" name="id" value={user.id} />
-											<button type="submit" class="text-yellow-600 hover:text-yellow-800 text-sm">Reset Pass</button>
+											<button type="submit" class="text-yellow-600 hover:text-yellow-800 text-sm">Reset PIN</button>
 										</form>
 									</td>
 								{/if}
