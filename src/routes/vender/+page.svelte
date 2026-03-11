@@ -119,6 +119,9 @@
 					class="bg-white p-4 rounded-lg shadow hover:shadow-md transition-shadow text-left border border-gray-200 hover:border-blue-400"
 				>
 					<div class="font-medium text-gray-800">{product.nombre}</div>
+					{#if product.descripcion}
+						<div class="text-xs text-gray-500 mt-0.5">{product.descripcion}</div>
+					{/if}
 					<div class="text-blue-600 font-bold text-lg">{'$'}{product.precio}</div>
 					<div class="text-xs text-gray-400">Stock: {product.stock}</div>
 				</button>

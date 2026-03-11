@@ -29,6 +29,7 @@ export const actions: Actions = {
 	create: async ({ request }) => {
 		const formData = await request.formData();
 		const nombre = formData.get('nombre') as string;
+		const descripcion = (formData.get('descripcion') as string) || null;
 		const precio = formData.get('precio') as string;
 		const stock = parseInt(formData.get('stock') as string);
 		const areaIdStr = formData.get('areaId') as string;
@@ -38,7 +39,7 @@ export const actions: Actions = {
 			return fail(400, { error: 'Todos los campos son requeridos' });
 		}
 
-		await db.insert(products).values({ nombre, precio, stock, areaId });
+		await db.insert(products).values({ nombre, descripcion, precio, stock, areaId });
 		return { success: true };
 	},
 
@@ -46,6 +47,7 @@ export const actions: Actions = {
 		const formData = await request.formData();
 		const id = parseInt(formData.get('id') as string);
 		const nombre = formData.get('nombre') as string;
+		const descripcion = (formData.get('descripcion') as string) || null;
 		const precio = formData.get('precio') as string;
 		const stock = parseInt(formData.get('stock') as string);
 		const activo = formData.get('activo') === 'true';
@@ -54,7 +56,7 @@ export const actions: Actions = {
 
 		await db
 			.update(products)
-			.set({ nombre, precio, stock, activo, areaId })
+			.set({ nombre, descripcion, precio, stock, activo, areaId })
 			.where(eq(products.id, id));
 
 		return { success: true };

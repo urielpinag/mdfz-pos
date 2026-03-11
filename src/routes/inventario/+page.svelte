@@ -15,7 +15,10 @@
 
 	let filteredProducts = $derived(
 		data.products
-			.filter((p: any) => p.nombre.toLowerCase().includes(search.toLowerCase()))
+			.filter((p: any) => {
+				const q = search.toLowerCase();
+				return p.nombre.toLowerCase().includes(q) || (p.descripcion && p.descripcion.toLowerCase().includes(q));
+			})
 			.filter((p: any) => filterAreaId === null || p.areaId === filterAreaId)
 	);
 </script>
@@ -36,6 +39,10 @@
 			<div class="flex-1 min-w-[140px]">
 				<label for="nombre" class="block text-xs text-gray-500 mb-1">Nombre</label>
 				<input type="text" name="nombre" id="nombre" required class="w-full px-3 py-2 border rounded-md text-sm" />
+			</div>
+			<div class="flex-1 min-w-[140px]">
+				<label for="descripcion" class="block text-xs text-gray-500 mb-1">Descripción</label>
+				<input type="text" name="descripcion" id="descripcion" class="w-full px-3 py-2 border rounded-md text-sm" />
 			</div>
 			<div class="w-32">
 				<label for="precio" class="block text-xs text-gray-500 mb-1">Precio</label>
@@ -96,6 +103,7 @@
 			<thead class="bg-gray-50 text-gray-600">
 				<tr>
 					<th class="text-left px-4 py-3">Nombre</th>
+					<th class="text-left px-4 py-3">Descripción</th>
 					<th class="text-left px-4 py-3">Área</th>
 					<th class="text-right px-4 py-3">Precio</th>
 					<th class="text-right px-4 py-3">Stock</th>
@@ -108,6 +116,7 @@
 					{#if editingId === product.id}
 						<tr class="border-t bg-blue-50">
 							<td class="px-4 py-2"><input type="text" name="nombre" form="edit-{product.id}" value={product.nombre} class="w-full px-2 py-1 border rounded text-sm" /></td>
+							<td class="px-4 py-2"><input type="text" name="descripcion" form="edit-{product.id}" value={product.descripcion ?? ''} class="w-full px-2 py-1 border rounded text-sm" /></td>
 							<td class="px-4 py-2">
 								<select name="areaId" form="edit-{product.id}" class="px-2 py-1 border rounded text-sm">
 									<option value="" selected={!product.areaId}>Sin área</option>
@@ -140,6 +149,7 @@
 					{:else}
 						<tr class="border-t hover:bg-gray-50">
 							<td class="px-4 py-3">{product.nombre}</td>
+							<td class="px-4 py-3 text-gray-500 text-xs">{product.descripcion ?? ''}</td>
 							<td class="px-4 py-3 text-gray-500 text-xs">{product.areaId ? areaMap[product.areaId] ?? '—' : '—'}</td>
 							<td class="px-4 py-3 text-right">${product.precio}</td>
 							<td class="px-4 py-3 text-right">{product.stock}</td>

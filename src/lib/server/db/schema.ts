@@ -20,6 +20,7 @@ export const areas = pgTable('areas', {
 export const products = pgTable('products', {
 	id: serial('id').primaryKey(),
 	nombre: varchar('nombre', { length: 255 }).notNull(),
+	descripcion: varchar('descripcion', { length: 500 }),
 	precio: numeric('precio', { precision: 10, scale: 2 }).notNull(),
 	stock: integer('stock').notNull().default(0),
 	activo: boolean('activo').notNull().default(true),
