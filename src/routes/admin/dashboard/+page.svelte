@@ -465,6 +465,7 @@
 						<th class="text-left px-4 py-3">ID</th>
 						<th class="text-left px-4 py-3">Nombre</th>
 						<th class="text-center px-4 py-3">Estado</th>
+						<th class="text-center px-4 py-3">Comanda</th>
 						<th class="text-center px-4 py-3">Productos</th>
 						{#if isAdmin}<th class="text-right px-4 py-3">Acciones</th>{/if}
 					</tr>
@@ -479,6 +480,12 @@
 									<select name="activo" form="edit-area-{area.id}" class="px-2 py-1 border rounded text-sm">
 										<option value="true" selected={area.activo}>Activo</option>
 										<option value="false" selected={!area.activo}>Inactivo</option>
+									</select>
+								</td>
+								<td class="px-4 py-2 text-center">
+									<select name="imprimirComanda" form="edit-area-{area.id}" class="px-2 py-1 border rounded text-sm">
+										<option value="true" selected={area.imprimirComanda}>Sí</option>
+										<option value="false" selected={!area.imprimirComanda}>No</option>
 									</select>
 								</td>
 								<td class="px-4 py-2 text-center text-gray-500">{data.areaProductCount[area.id] ?? 0}</td>
@@ -499,6 +506,11 @@
 								<td class="px-4 py-3 text-center">
 									<span class="text-xs px-2 py-0.5 rounded {area.activo ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
 										{area.activo ? 'Activo' : 'Inactivo'}
+									</span>
+								</td>
+								<td class="px-4 py-3 text-center">
+									<span class="text-xs px-2 py-0.5 rounded {area.imprimirComanda ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-500'}">
+										{area.imprimirComanda ? '🖨️ Sí' : 'No'}
 									</span>
 								</td>
 								<td class="px-4 py-3 text-center text-gray-500">{data.areaProductCount[area.id] ?? 0}</td>

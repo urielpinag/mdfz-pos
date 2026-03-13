@@ -14,7 +14,8 @@ export const users = pgTable('users', {
 export const areas = pgTable('areas', {
 	id: serial('id').primaryKey(),
 	nombre: varchar('nombre', { length: 100 }).notNull().unique(),
-	activo: boolean('activo').notNull().default(true)
+	activo: boolean('activo').notNull().default(true),
+	imprimirComanda: boolean('imprimir_comanda').notNull().default(false)
 });
 
 export const products = pgTable('products', {

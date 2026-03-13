@@ -1,8 +1,9 @@
 {
-  description = "Entorno de desarrollo para POS Minimalista";
+  description = "POS mdfz";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    # Usamos la rama estable que tiene mejores binarios para Mac
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
     utils.url = "github:numtide/flake-utils";
   };
 
@@ -14,16 +15,15 @@
       {
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
-            nodejs_20
+            nodejs_20           # Node estándar (no slim)
             nodePackages.npm
             nodePackages.typescript
-            postgresql # Para comandos como psql si los necesitas
+            postgresql_16
           ];
 
           shellHook = ''
-            echo "--- Entorno POS Minimalista Activado ---"
-            echo "Node version: $(node -v)"
-            echo "Recuerda: Usa 'npm run dev' para iniciar SvelteKit"
+            echo "--- Entorno POS Activado (Vía Caché) ---"
+            node -v
           '';
         };
       });

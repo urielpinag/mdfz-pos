@@ -45,6 +45,17 @@ interface TicketData {
 	fecha: Date;
 }
 
+export interface ComandaItem {
+	nombre: string;
+	cantidad: number;
+}
+
+export interface ComandaData {
+	orderId: number;
+	items: ComandaItem[];
+	fecha: Date;
+}
+
 const encoder = new TextEncoder();
 
 function text(str: string): number[] {
@@ -113,6 +124,46 @@ export function generateTicket(data: TicketData): Uint8Array {
 	buf.push(LF);
 	buf.push(...line('Gracias por su compra'));
 	buf.push(LF);
+
+	// Feed and cut
+	buf.push(...CMD.FEED);
+	buf.push(...CMD.CUT);
+
+	return new Uint8Array(buf);
+}
+
+/**
+ * Generates a kitchen/bar comanda ticket.
+ * Large text, no prices — just what needs to be prepared.
+ */
+export function generateComanda(data: ComandaData): Uint8Array {
+	const buf: number[] = [];
+
+	buf.push(...CMD.INIT);
+
+	// Header
+	buf.push(...CMD.ALIGN_CENTER);
+	buf.push(...CMD.BOLD_ON);
+	buf.push(...CMD.DOUBLE_HEIGHT);
+	buf.push(...line('*** COMANDA ***'));
+	buf.push(...CMD.NORMAL_SIZE);
+	buf.push(...CMD.BOLD_OFF);
+	buf.push(...line(`Orden #${data.orderId}`));
+	buf.push(...line(data.fecha.toLocaleTimeString('es-MX')));
+	buf.push(...separator());
+
+	// Items — big and bold
+	buf.push(...CMD.ALIGN_LEFT);
+	for (const item of data.items) {
+		buf.push(...CMD.BOLD_ON);
+		buf.push(...CMD.DOUBLE_HEIGHT);
+		buf.push(...line(`${item.cantidad}x ${item.nombre}`));
+		buf.push(...CMD.NORMAL_SIZE);
+		buf.push(...CMD.BOLD_OFF);
+		buf.push(LF);
+	}
+
+	buf.push(...separator());
 
 	// Feed and cut
 	buf.push(...CMD.FEED);

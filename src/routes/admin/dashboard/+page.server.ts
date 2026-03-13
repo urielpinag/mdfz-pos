@@ -223,7 +223,8 @@ export const actions: Actions = {
 		const id = parseInt(formData.get('id') as string);
 		const nombre = formData.get('nombre') as string;
 		const activo = formData.get('activo') === 'true';
-		await db.update(areas).set({ nombre, activo }).where(eq(areas.id, id));
+		const imprimirComanda = formData.get('imprimirComanda') === 'true';
+		await db.update(areas).set({ nombre, activo, imprimirComanda }).where(eq(areas.id, id));
 		return { success: true };
 	}
 };

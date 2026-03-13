@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import type { PageData, ActionData } from './$types.js';
+	import { setupPrinter, printTicket, printComanda, isPrinterConnected } from '$lib/printer.js';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
-	let cart: Map<number, { id: number; nombre: string; precio: string; cantidad: number }> = $state(new Map());
+	let cart: Map<number, { id: number; nombre: string; precio: string; cantidad: number; areaId: number | null }> = $state(new Map());
 	let metodoPago: string = $state('efectivo');
 	let showSuccess = $state(false);
 	let showCorteCaja = $state(false);
@@ -13,6 +14,47 @@
 	let montoReal = $state('');
 	let selectedAreaId: number | null = $state(null);
 
+	// ── Printer state ──────────────────────────────────────────────────────────
+	let printerConnected = $state(false);
+	let toastMessage = $state('');
+	let toastType: 'success' | 'error' | 'info' = $state('info');
+	let toastTimer: ReturnType<typeof setTimeout> | null = null;
+
+	// Comanda pendiente: se muestra el modal después de imprimir el ticket
+	type ComandaPending = { orderId: number; items: { nombre: string; cantidad: number }[]; fecha: Date };
+	let pendingComanda: ComandaPending | null = $state(null);
+
+	async function printPendingComanda() {
+		if (!pendingComanda) return;
+		const data_ = pendingComanda;
+		pendingComanda = null;
+		try {
+			await printComanda(data_);
+			showToast('Comanda enviada ✓', 'success');
+		} catch (err: unknown) {
+			showToast(err instanceof Error ? err.message : 'Error al imprimir comanda', 'error');
+		}
+	}
+
+	function showToast(msg: string, type: 'success' | 'error' | 'info' = 'info') {
+		toastMessage = msg;
+		toastType = type;
+		if (toastTimer) clearTimeout(toastTimer);
+		toastTimer = setTimeout(() => (toastMessage = ''), 3500);
+	}
+
+	async function handleSetupPrinter() {
+		try {
+			await setupPrinter();
+			printerConnected = true;
+			showToast('Impresora conectada ✓', 'success');
+		} catch (err: unknown) {
+			printerConnected = false;
+			showToast(err instanceof Error ? err.message : 'Error al conectar impresora', 'error');
+		}
+	}
+
+	// ── Product / cart helpers ─────────────────────────────────────────────────
 	let filteredProducts = $derived(
 		selectedAreaId === null
 			? data.products
@@ -25,13 +67,19 @@
 
 	let cartArray = $derived(Array.from(cart.values()));
 
-	function addToCart(product: { id: number; nombre: string; precio: string }) {
+	function addToCart(product: { id: number; nombre: string; precio: string; areaId?: number | null }) {
 		const newCart = new Map(cart);
 		const existing = newCart.get(product.id);
 		if (existing) {
 			newCart.set(product.id, { ...existing, cantidad: existing.cantidad + 1 });
 		} else {
-			newCart.set(product.id, { ...product, cantidad: 1 });
+			newCart.set(product.id, {
+				id: product.id,
+				nombre: product.nombre,
+				precio: product.precio,
+				areaId: product.areaId ?? null,
+				cantidad: 1
+			});
 		}
 		cart = newCart;
 	}
@@ -59,7 +107,7 @@
 		cart = new Map();
 	}
 
-	// Compute payment breakdown from shift orders
+	// ── Shift / corte helpers ─────────────────────────────────────────────────
 	let shiftEfectivo = $derived(
 		data.shiftOrders.filter((o: any) => o.metodoPago === 'efectivo').reduce((s: number, o: any) => s + parseFloat(o.total), 0)
 	);
@@ -186,10 +234,76 @@
 				{/each}
 			</div>
 
-			<form method="POST" action="?/cobrar" use:enhance={() => {
+			<!-- Printer setup button -->
+			<button
+				onclick={handleSetupPrinter}
+				class="w-full mb-2 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors border
+					{printerConnected
+						? 'bg-green-50 border-green-400 text-green-700 hover:bg-green-100'
+						: 'bg-gray-100 border-gray-300 text-gray-600 hover:bg-gray-200'}"
+			>
+				🖨️ {printerConnected ? 'Impresora conectada ✓' : 'Configurar Impresora'}
+			</button>
+
+			<form method="POST" action="?/cobrar" use:enhance={({ cancel }) => {
+				// Si no hay impresora, preguntar si igualmente quieren cobrar
+				if (!printerConnected) {
+					const continuar = window.confirm(
+						'⚠️ La impresora no está conectada.\n¿Deseas cobrar sin imprimir el ticket?'
+					);
+					if (!continuar) { cancel(); return; }
+				}
+
 				return async ({ result, update }) => {
+					// Snapshot BEFORE update() clears the cart state
+					const ticketItems = cartArray.map(i => ({
+						nombre: i.nombre,
+						cantidad: i.cantidad,
+						precioUnitario: i.precio
+					}));
+					const ticketMetodo = metodoPago;
+
+					// Items que necesitan comanda (área con imprimirComanda=true)
+					const comandaItems = cartArray
+						.filter(i => {
+							const area = data.areas.find((a: any) => a.id === i.areaId);
+							return area?.imprimirComanda === true;
+						})
+						.map(i => ({ nombre: i.nombre, cantidad: i.cantidad }));
+
 					await update();
-					if (result.type === 'success') clearCart();
+
+					if (result.type === 'success') {
+						clearCart();
+						const r = result.data as { orderId: number; total: string };
+						try {
+							if (printerConnected) {
+								await printTicket({
+									businessName: 'POS MDFZ',
+									orderId: r.orderId,
+									items: ticketItems,
+									total: r.total,
+									metodoPago: ticketMetodo,
+									vendedor: data.shift?.userId?.toString() ?? 'Vendedor',
+									fecha: new Date()
+								});
+								showToast('Ticket impreso ✓', 'success');
+								printerConnected = isPrinterConnected();
+
+								// En lugar de imprimir comanda automáticamente,
+								// mostrar modal para que el usuario corte el papel primero
+								if (comandaItems.length > 0) {
+									pendingComanda = { orderId: r.orderId, items: comandaItems, fecha: new Date() };
+								}
+							}
+						} catch (err: unknown) {
+							showToast(
+								err instanceof Error ? err.message : 'Error al imprimir ticket',
+								'error'
+							);
+							printerConnected = isPrinterConnected();
+						}
+					}
 				};
 			}}>
 				<input type="hidden" name="cart" value={JSON.stringify(cartArray)} />
@@ -199,7 +313,7 @@
 					disabled={cartArray.length === 0}
 					class="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg transition-colors"
 				>
-					Cobrar {'$'}{cartTotal.toFixed(2)}
+					{printerConnected ? '🖨️ Cobrar e Imprimir' : 'Cobrar'} {'$'}{cartTotal.toFixed(2)}
 				</button>
 			</form>
 
@@ -212,6 +326,60 @@
 		</div>
 	</div>
 </div>
+
+<!-- Toast notification -->
+{#if toastMessage}
+	<div
+		class="fixed bottom-5 right-5 z-[100] max-w-xs px-4 py-3 rounded-lg shadow-lg text-white text-sm font-medium
+			{toastType === 'success' ? 'bg-green-600' : toastType === 'error' ? 'bg-red-600' : 'bg-gray-800'}"
+		role="alert"
+	>
+		{toastMessage}
+	</div>
+{/if}
+
+<!-- Comanda confirmation modal -->
+{#if pendingComanda}
+	<div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+		<div class="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6">
+			<div class="text-center mb-4">
+				<div class="text-4xl mb-2">✂️</div>
+				<h3 class="text-lg font-bold text-gray-800">Corta el papel</h3>
+				<p class="text-sm text-gray-500 mt-1">
+					Cuando hayas separado el ticket del cliente, presiona el botón para imprimir la comanda de cocina.
+				</p>
+			</div>
+
+			<!-- Preview of comanda items -->
+			<div class="bg-gray-50 rounded-lg p-3 mb-4 text-sm space-y-1 border border-dashed border-gray-300">
+				<div class="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">
+					🖨️ Comanda #{pendingComanda.orderId}
+				</div>
+				{#each pendingComanda.items as item}
+					<div class="flex justify-between font-medium">
+						<span>{item.nombre}</span>
+						<span class="text-blue-600">×{item.cantidad}</span>
+					</div>
+				{/each}
+			</div>
+
+			<div class="flex gap-3">
+				<button
+					onclick={() => pendingComanda = null}
+					class="flex-1 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm transition-colors"
+				>
+					Cancelar
+				</button>
+				<button
+					onclick={printPendingComanda}
+					class="flex-1 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm transition-colors"
+				>
+					🖨️ Imprimir Comanda
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
 
 <!-- Corte de Caja Modal -->
 {#if showCorteCaja}
