@@ -12,6 +12,7 @@
 	let editingAreaId: number | null = $state(null);
 	let editingShiftId: number | null = $state(null);
 	let editingOrderId: number | null = $state(null);
+	let showImportCSV = $state(false);
 	let activeTab: 'users' | 'shifts' | 'orders' | 'areas' = $state('users');
 	let expandedShiftId: number | null = $state(null);
 	let expandedOrderId: number | null = $state(null);
@@ -98,6 +99,9 @@
 	{/if}
 	{#if form?.resetSuccess}
 		<div class="bg-yellow-100 text-yellow-700 px-4 py-2 rounded mb-4 text-sm">PIN reseteado a 0000</div>
+	{/if}
+	{#if form?.importSuccess}
+		<div class="bg-green-100 text-green-700 px-4 py-2 rounded mb-4 text-sm">✅ Importación exitosa: {form.importedCount} registros importados (Turno #{form.shiftId})</div>
 	{/if}
 
 	<!-- ==================== USUARIOS ==================== -->
@@ -343,8 +347,43 @@
 			</div>
 			<button onclick={applyFilters} class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm">Filtrar</button>
 			<button onclick={clearFilters} class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-md text-sm">Limpiar</button>
-			<button onclick={downloadCSV} class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm ml-auto">📥 Descargar CSV</button>
+			<div class="ml-auto flex gap-2">
+				<button onclick={downloadCSV} class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm">📥 Descargar CSV</button>
+				{#if isAdmin}
+					<button onclick={() => showImportCSV = !showImportCSV} class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-md text-sm">
+						{showImportCSV ? 'Cancelar' : '📤 Importar CSV'}
+					</button>
+				{/if}
+			</div>
 		</div>
+
+		{#if showImportCSV && isAdmin}
+			<form method="POST" action="?/importCSV" enctype="multipart/form-data" use:enhance={() => {
+				return async ({ update }) => {
+					await update();
+					showImportCSV = false;
+				};
+			}} class="bg-orange-50 border border-orange-200 p-4 rounded-lg shadow mb-4">
+				<h3 class="text-sm font-semibold text-orange-800 mb-3">📤 Importar Registros desde CSV</h3>
+				<div class="flex gap-3 items-end flex-wrap">
+					<div class="flex-1 min-w-[200px]">
+						<label for="csv-file" class="block text-xs text-gray-500 mb-1">Archivo CSV</label>
+						<input type="file" name="csvFile" id="csv-file" accept=".csv" required class="w-full px-3 py-2 border rounded-md text-sm bg-white" />
+					</div>
+					<div class="w-48">
+						<label for="assign-user" class="block text-xs text-gray-500 mb-1">Asignar ventas a</label>
+						<select name="assignUserId" id="assign-user" required class="w-full px-3 py-2 border rounded-md text-sm">
+							<option value="">Seleccionar...</option>
+							{#each data.users as u}
+								<option value={u.id}>{u.username} ({u.role})</option>
+							{/each}
+						</select>
+					</div>
+					<button type="submit" class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-md text-sm" onclick={(e) => { if (!confirm('¿Importar registros? Se creará un nuevo turno y se descontará stock.')) e.preventDefault(); }}>Importar</button>
+				</div>
+				<p class="text-xs text-gray-500 mt-2">Se creará un turno con las fechas de la primera y última venta. El stock se descontará automáticamente.</p>
+			</form>
+		{/if}
 
 		<!-- Summary -->
 		<div class="flex gap-4 mb-4 text-sm">

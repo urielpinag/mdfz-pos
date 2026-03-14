@@ -248,5 +248,187 @@ export const actions: Actions = {
 		const imprimirComanda = formData.get('imprimirComanda') === 'true';
 		await db.update(areas).set({ nombre, activo, imprimirComanda }).where(eq(areas.id, id));
 		return { success: true };
+	},
+
+	importCSV: async ({ request, locals }) => {
+		if (locals.user?.role !== 'admin') return fail(403, { error: 'No autorizado' });
+		const formData = await request.formData();
+		const file = formData.get('csvFile') as File;
+		const assignUserId = parseInt(formData.get('assignUserId') as string);
+
+		if (!file || !assignUserId) {
+			return fail(400, { error: 'Archivo CSV y usuario son requeridos' });
+		}
+
+		const csvText = await file.text();
+		// Remove BOM if present
+		const cleanText = csvText.replace(/^\uFEFF/, '');
+		const lines = cleanText.split('\n').filter(l => l.trim());
+
+		if (lines.length < 2) {
+			return fail(400, { error: 'El archivo CSV está vacío o no tiene registros' });
+		}
+
+		// Skip header
+		const dataLines = lines.slice(1);
+
+		// Parse CSV rows — handle quoted fields properly
+		function parseCSVLine(line: string): string[] {
+			const fields: string[] = [];
+			let current = '';
+			let inQuotes = false;
+			for (let i = 0; i < line.length; i++) {
+				const ch = line[i];
+				if (ch === '"') {
+					inQuotes = !inQuotes;
+				} else if (ch === ',' && !inQuotes) {
+					fields.push(current.trim());
+					current = '';
+				} else {
+					current += ch;
+				}
+			}
+			fields.push(current.trim());
+			return fields;
+		}
+
+		// Parse date: "13/3/2026, 9:54:46 p.m." -> Date
+		function parseDate(dateStr: string): Date {
+			// dateStr comes as two CSV fields merged: "13/3/2026" and " 9:54:46 p.m."
+			// But since the date contains a comma, we receive it already split
+			// We'll handle this in the row parsing
+			return new Date(dateStr);
+		}
+
+		// Parse rows — note the date field contains a comma so it spans 2 CSV columns
+		// Columns: ID, Fecha(date part), Fecha(time part), Usuario, Método de Pago, Total, Productos
+		interface CSVRow {
+			id: number;
+			fecha: Date;
+			metodoPago: 'efectivo' | 'tarjeta' | 'transferencia';
+			total: number;
+			productos: { cantidad: number; nombre: string }[];
+		}
+
+		const rows: CSVRow[] = [];
+
+		for (const line of dataLines) {
+			const fields = parseCSVLine(line);
+			if (fields.length < 7) continue;
+
+			const [idStr, datePart, timePart, _usuario, metodoPago, totalStr, productosStr] = fields;
+
+			// Parse "13/3/2026" + "9:54:46 p.m." -> Date
+			const [day, month, year] = datePart.split('/').map(Number);
+			const timeClean = timePart.trim();
+			const isPM = timeClean.toLowerCase().includes('p.m.');
+			const isAM = timeClean.toLowerCase().includes('a.m.');
+			const timeOnly = timeClean.replace(/\s*(a\.m\.|p\.m\.)\s*/gi, '').trim();
+			const [hours, minutes, seconds] = timeOnly.split(':').map(Number);
+
+			let hour24 = hours;
+			if (isPM && hours !== 12) hour24 = hours + 12;
+			if (isAM && hours === 12) hour24 = 0;
+
+			const fecha = new Date(year, month - 1, day, hour24, minutes, seconds);
+
+			// Parse products: "4x LLAVERO - COLORES; 1x SEPARADORES - COLORES"
+			const productos = productosStr.split(';').map(p => p.trim()).filter(Boolean).map(p => {
+				const match = p.match(/^(\d+)x\s+(.+)$/);
+				if (!match) return null;
+				return { cantidad: parseInt(match[1]), nombre: match[2].trim() };
+			}).filter(Boolean) as { cantidad: number; nombre: string }[];
+
+			rows.push({
+				id: parseInt(idStr),
+				fecha,
+				metodoPago: metodoPago as 'efectivo' | 'tarjeta' | 'transferencia',
+				total: parseFloat(totalStr),
+				productos
+			});
+		}
+
+		if (rows.length === 0) {
+			return fail(400, { error: 'No se encontraron registros válidos en el CSV' });
+		}
+
+		// Load all products from DB for name matching
+		const allProducts = await db.select().from(products);
+		const productByName: Record<string, typeof allProducts[0]> = {};
+		for (const p of allProducts) {
+			productByName[p.nombre.toUpperCase()] = p;
+		}
+
+		// Check that all product names exist
+		const missingProducts: string[] = [];
+		for (const row of rows) {
+			for (const item of row.productos) {
+				if (!productByName[item.nombre.toUpperCase()]) {
+					if (!missingProducts.includes(item.nombre)) {
+						missingProducts.push(item.nombre);
+					}
+				}
+			}
+		}
+
+		if (missingProducts.length > 0) {
+			return fail(400, { error: `Productos no encontrados en la BD: ${missingProducts.join(', ')}` });
+		}
+
+		// Sort rows by date ascending to find first and last
+		rows.sort((a, b) => a.fecha.getTime() - b.fecha.getTime());
+		const firstDate = rows[0].fecha;
+		const lastDate = rows[rows.length - 1].fecha;
+
+		// Calculate shift totals by payment method
+		let montoEfectivo = 0;
+		let montoTarjeta = 0;
+		let montoTransferencia = 0;
+		for (const row of rows) {
+			if (row.metodoPago === 'efectivo') montoEfectivo += row.total;
+			else if (row.metodoPago === 'tarjeta') montoTarjeta += row.total;
+			else if (row.metodoPago === 'transferencia') montoTransferencia += row.total;
+		}
+
+		// Create shift
+		const [newShift] = await db.insert(shifts).values({
+			apertura: firstDate,
+			cierre: lastDate,
+			userId: assignUserId,
+			montoEsperado: montoEfectivo.toFixed(2),
+			montoTarjeta: montoTarjeta.toFixed(2),
+			montoTransferencia: montoTransferencia.toFixed(2)
+		}).returning();
+
+		// Create orders and order items, deduct stock
+		let importedCount = 0;
+		for (const row of rows) {
+			const [order] = await db.insert(orders).values({
+				total: row.total.toFixed(2),
+				metodoPago: row.metodoPago,
+				userId: assignUserId,
+				shiftId: newShift.id,
+				createdAt: row.fecha
+			}).returning();
+
+			for (const item of row.productos) {
+				const product = productByName[item.nombre.toUpperCase()];
+				await db.insert(orderItems).values({
+					orderId: order.id,
+					productId: product.id,
+					cantidad: item.cantidad,
+					precioUnitario: product.precio
+				});
+
+				// Deduct stock
+				await db
+					.update(products)
+					.set({ stock: sql`${products.stock} - ${item.cantidad}` })
+					.where(eq(products.id, product.id));
+			}
+			importedCount++;
+		}
+
+		return { importSuccess: true, importedCount, shiftId: newShift.id };
 	}
 };
