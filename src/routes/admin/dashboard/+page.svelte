@@ -189,6 +189,12 @@
 											<input type="hidden" name="id" value={user.id} />
 											<button type="submit" class="text-yellow-600 hover:text-yellow-800 text-sm">Reset PIN</button>
 										</form>
+										{#if user.id !== data.user?.id}
+											<form method="POST" action="?/deleteUser" use:enhance class="inline">
+												<input type="hidden" name="id" value={user.id} />
+												<button type="submit" class="text-red-500 hover:text-red-700 text-sm ml-2" onclick={(e) => { if (!confirm('¿Eliminar este usuario? Sus registros serán reasignados a tu cuenta.')) e.preventDefault(); }}>Eliminar</button>
+											</form>
+										{/if}
 									</td>
 								{/if}
 							</tr>

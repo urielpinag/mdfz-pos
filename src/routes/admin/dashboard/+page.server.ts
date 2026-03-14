@@ -141,6 +141,28 @@ export const actions: Actions = {
 		return { resetSuccess: true };
 	},
 
+	deleteUser: async ({ request, locals }) => {
+		if (locals.user?.role !== 'admin') return fail(403, { error: 'No autorizado' });
+		const formData = await request.formData();
+		const id = parseInt(formData.get('id') as string);
+		const adminId = locals.user!.id;
+
+		if (id === adminId) {
+			return fail(400, { error: 'No puedes eliminarte a ti mismo' });
+		}
+
+		// Reassign shifts owned by this user to the admin
+		await db.update(shifts).set({ userId: adminId }).where(eq(shifts.userId, id));
+		// Reassign supervisor references to the admin
+		await db.update(shifts).set({ supervisorId: adminId }).where(eq(shifts.supervisorId, id));
+		// Reassign orders to the admin
+		await db.update(orders).set({ userId: adminId }).where(eq(orders.userId, id));
+		// Now safe to delete the user
+		await db.delete(users).where(eq(users.id, id));
+
+		return { success: true };
+	},
+
 	deleteOrder: async ({ request, locals }) => {
 		if (locals.user?.role !== 'admin') return fail(403, { error: 'No autorizado' });
 		const formData = await request.formData();

@@ -13,6 +13,7 @@
 	let corteError = $state('');
 	let montoReal = $state('');
 	let selectedAreaId: number | null = $state(null);
+	let searchQuery: string = $state('');
 
 	// ── Printer state ──────────────────────────────────────────────────────────
 	let printerConnected = $state(false);
@@ -55,11 +56,19 @@
 	}
 
 	// ── Product / cart helpers ─────────────────────────────────────────────────
-	let filteredProducts = $derived(
-		selectedAreaId === null
+	let filteredProducts = $derived(() => {
+		let result = selectedAreaId === null
 			? data.products
-			: data.products.filter((p: any) => p.areaId === selectedAreaId)
-	);
+			: data.products.filter((p: any) => p.areaId === selectedAreaId);
+		if (searchQuery.trim()) {
+			const q = searchQuery.trim().toLowerCase();
+			result = result.filter((p: any) =>
+				p.nombre.toLowerCase().includes(q) ||
+				(p.descripcion && p.descripcion.toLowerCase().includes(q))
+			);
+		}
+		return result;
+	});
 
 	let cartTotal = $derived(
 		Array.from(cart.values()).reduce((sum, item) => sum + parseFloat(item.precio) * item.cantidad, 0)
@@ -160,8 +169,18 @@
 			{/each}
 		</div>
 
+		<!-- Search Bar -->
+		<div class="mb-4">
+			<input
+				type="text"
+				placeholder="🔍 Buscar artículo por nombre o descripción..."
+				bind:value={searchQuery}
+				class="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+			/>
+		</div>
+
 		<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-			{#each filteredProducts as product}
+			{#each filteredProducts() as product}
 				<button
 					onclick={() => addToCart(product)}
 					class="bg-white p-4 rounded-lg shadow hover:shadow-md transition-shadow text-left border border-gray-200 hover:border-blue-400"
