@@ -41,11 +41,13 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const filterMetodo = url.searchParams.get('metodo');
 
 	const conditions = [];
-	if (dateFrom) conditions.push(gte(orders.createdAt, new Date(dateFrom)));
+	if (dateFrom) {
+		const [year, month, day] = dateFrom.split('-').map(Number);
+		conditions.push(gte(orders.createdAt, new Date(year, month - 1, day, 0, 0, 0, 0)));
+	}
 	if (dateTo) {
-		const toDate = new Date(dateTo);
-		toDate.setHours(23, 59, 59, 999);
-		conditions.push(lte(orders.createdAt, toDate));
+		const [year, month, day] = dateTo.split('-').map(Number);
+		conditions.push(lte(orders.createdAt, new Date(year, month - 1, day, 23, 59, 59, 999)));
 	}
 	if (filterUser) conditions.push(eq(orders.userId, parseInt(filterUser)));
 	if (filterMetodo && ['efectivo', 'tarjeta', 'transferencia'].includes(filterMetodo)) {
